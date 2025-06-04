@@ -1,0 +1,38 @@
+- name: Run using a project directory
+  hosts: localhost
+  gather_facts: false
+  become: true
+  vars:
+    env_vars:
+      MYSQL_ROOT_PASSWORD: "{{ lookup('community.general.passwordstore', 'wordpress/database/root', create=true) }}"
+      MYSQL_PASSWORD: "{{ lookup('community.general.passwordstore', 'wordpress/database/wordpress', create=true) }}"
+      WORDPRESS_DB_PASSWORD: "{{ lookup('community.general.passwordstore', 'wordpress/database/wordpress', create=true) }}"
+
+  tasks:
+    - name: Tear down existing services
+      community.docker.docker_compose_v2:
+        project_src: wordpress
+        state: absent
+
+    - name: Display all variables
+      ansible.builtin.debug:
+        var: env_vars
+
+    - name: Create and start services
+      community.docker.docker_compose_v2:
+        project_src: wordpress
+      environment: "{{ env_vars }}"
+      register: output
+
+    - name: Verify WP/DB are running
+      ansible.builtin.assert:
+        that:
+          - wp_container.State == 'running'
+          - db_container.State == 'running'
+      vars:
+        wp_container: >-
+          {{ output.containers | selectattr("Service", "equalto", "wordpress") | first }}
+        db_container: >-
+          {{ output.containers | selectattr("Service", "equalto", "db") | first }}
+
+
